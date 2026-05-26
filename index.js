@@ -11,7 +11,11 @@ const DATA_DIR = join(__dirname, 'data');
 const DIGESTS_DIR = join(DATA_DIR, 'digests');
 const BIAS_HISTORY_FILE = join(DATA_DIR, 'bias_history.json');
 const UNIQLO_CACHE_FILE = join(DATA_DIR, 'uniqlo_cache.json');
+const GAP_CACHE_FILE = join(DATA_DIR, 'gap_cache.json');
+const OLDNAVY_CACHE_FILE = join(DATA_DIR, 'oldnavy_cache.json');
+const AE_CACHE_FILE = join(DATA_DIR, 'ae_cache.json');
 const UNIQLO_REFRESH_DAYS = 3;
+const RETAIL_REFRESH_DAYS = 3; // Gap, Old Navy, AE — scraped via agent-browser when stale
 
 [DATA_DIR, DIGESTS_DIR].forEach(d => { if (!existsSync(d)) mkdirSync(d, { recursive: true }); });
 
@@ -236,6 +240,22 @@ function loadBiasHistory() {
   try { return JSON.parse(readFileSync(BIAS_HISTORY_FILE, 'utf8')); } catch (e) { return []; }
 }
 
+function getBrowserBrandStatus(cacheFile) {
+  let cache = { products: [], lastPulled: null };
+  if (existsSync(cacheFile)) {
+    try { cache = JSON.parse(readFileSync(cacheFile, 'utf8')); } catch (e) {}
+  }
+  const daysSince = cache.lastPulled
+    ? (Date.now() - new Date(cache.lastPulled).getTime()) / 86400000
+    : Infinity;
+  return {
+    products: cache.products,
+    lastPulled: cache.lastPulled,
+    fresh: false,
+    needsBrowserScrape: daysSince >= RETAIL_REFRESH_DAYS,
+  };
+}
+
 // --- Main ---
 const today = new Date().toISOString().split('T')[0];
 
@@ -250,6 +270,10 @@ const [gq, highsnobiety, hypebeast, vogue, uniqlo] = await Promise.all([
 const biasHistory = loadBiasHistory();
 const articles = [...gq, ...highsnobiety, ...hypebeast, ...vogue];
 
+const gap = getBrowserBrandStatus(GAP_CACHE_FILE);
+const oldNavy = getBrowserBrandStatus(OLDNAVY_CACHE_FILE);
+const ae = getBrowserBrandStatus(AE_CACHE_FILE);
+
 console.log(JSON.stringify({
   wakeAgent: true,
   data: {
@@ -262,6 +286,9 @@ console.log(JSON.stringify({
       Vogue: vogue.length,
     },
     uniqlo,
+    gap,
+    oldNavy,
+    ae,
     biasHistory,
   },
 }));
