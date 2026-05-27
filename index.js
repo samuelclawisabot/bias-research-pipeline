@@ -132,7 +132,35 @@ async function scrapeGQ() {
 async function scrapeHighsnobiety() {
   const { ok, html } = await fetchPage('https://www.highsnobiety.com/style/');
   if (!ok || !html) return [];
-  return extractArticles(html, 'Highsnobiety');
+
+  // Highsnobiety renders article cards with empty <a> links + aria-labelledby.
+  // Titles are in <span data-cy="teaser-headline"> siblings; links are in href="/p/slug" anchors.
+  const articles = [];
+  const seen = new Set();
+
+  // Extract all teaser headlines with their paired /p/ slugs
+  const teaserRegex = /data-cy="teaser-headline">([^<]{15,180})<\/span>[\s\S]{0,600}?href="(\/p\/[^"]+)"/g;
+  for (const match of [...html.matchAll(teaserRegex)].slice(0, 15)) {
+    const title = decodeHtmlEntities(match[1]);
+    if (!seen.has(title)) {
+      seen.add(title);
+      articles.push({ source: 'Highsnobiety', title, url: `https://www.highsnobiety.com${match[2]}` });
+    }
+  }
+
+  // Fallback: reverse order (link before headline in some card layouts)
+  if (articles.length < 3) {
+    const reverseRegex = /href="(\/p\/[^"]+)"[\s\S]{0,600}?data-cy="teaser-headline">([^<]{15,180})<\/span>/g;
+    for (const match of [...html.matchAll(reverseRegex)].slice(0, 15)) {
+      const title = decodeHtmlEntities(match[2]);
+      if (!seen.has(title)) {
+        seen.add(title);
+        articles.push({ source: 'Highsnobiety', title, url: `https://www.highsnobiety.com${match[1]}` });
+      }
+    }
+  }
+
+  return articles.slice(0, 10);
 }
 
 async function scrapeHypebeast() {
